@@ -11,7 +11,7 @@ app.use(express.json());
 
 // Configuration
 const MOBILE_PREFIX = "019";
-const MAX_CONCURRENT = 1000; // আল্ট্রা ফাস্ট concurrency
+const MAX_CONCURRENT = 100; // আল্ট্রা ফাস্ট concurrency
 const TARGET_LOCATION = "http://fsmms.dgf.gov.bd/bn/step2/movementContractor/form";
 
 const BASE_HEADERS = {
