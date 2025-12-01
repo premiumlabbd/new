@@ -183,19 +183,51 @@ if (!nid || !dob) return res.status(400).json({ error: 'NID and DOB are required
     if (!foundOTP) return res.status(404).json({ success: false, error: "OTP not found" });
 
     const html = await fetchFormData(session, cookies);
-    const ids = ["contractorName","fatherName","motherName","spouseName","nidPerDivision","nidPerDistrict","nidPerUpazila","nidPerUnion","nidPerVillage","nidPerWard","nidPerZipCode","nidPerPostOffice","nidPerHolding","nidPerMouza"];
-        const extracted = extractFields(html, ids);
-        const finalData = enrichData(extracted.contractorName || "", extracted, nid, dob);
+    const ids = [
+"contractorName",
+"fatherName",
+"motherName",
+"spouseName",
+"nidPerDivision",
+"nidPerDistrict",
+"nidPerUpazila",
+"nidPerUnion",
+"nidPerVillage",
+"nidPerWard",
+"nidPerZipCode",
+"nidPerPostOffice",
+"nidPerHolding",
+"nidPerMouza"
+];
 
-        res.json({ success: true, data: finalData, sessionInfo: { mobileUsed: mobile, otpFound: foundOTP } });
+const extracted = extractFields(html, ids);
+const finalData = enrichData(extracted.contractorName || "", extracted, nid, dob);
 
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
+res.json({
+success: true,
+data: finalData,
+sessionInfo: { mobileUsed: mobile, otpFound: foundOTP }
+});
 });
 
-app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date().toISOString(), service: 'Enhanced NID Info API', version: '2.0.4' }));
+// Health check endpoint
+app.get('/health', (req, res) => {
+res.json({
+status: 'OK',
+timestamp: new Date().toISOString(),
+service: 'Enhanced NID Info API',
+version: '2.1.0'
+});
+});
 
-app.get('/test-creds', (req, res) => res.json({ mobile: randomMobile(MOBILE_PREFIX), password: randomPassword(), note: 'Random test credentials' }));
+// Random test credentials endpoint
+app.get('/test-creds', (req, res) => {
+res.json({
+mobile: randomMobile(MOBILE_PREFIX),
+password: randomPassword(),
+note: 'Random test credentials'
+});
+});
 
-app.listen(PORT, () => console.log(`🚀 API running on port ${PORT}`));
+// Start server
+app.listen(PORT, () => console.log("🚀 API running on port ${PORT}"));
